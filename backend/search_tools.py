@@ -89,7 +89,8 @@ class CourseSearchTool(Tool):
         """Format search results with course and lesson context"""
         formatted = []
         sources = []  # Track sources for the UI
-        
+        seen_sources = set()  # De-dupe by (text, link) across chunks
+
         for doc, meta in zip(results.documents, results.metadata):
             course_title = meta.get('course_title', 'unknown')
             lesson_num = meta.get('lesson_number')
@@ -113,7 +114,12 @@ class CourseSearchTool(Tool):
             else:
                 link = self.store.get_course_link(course_title)
 
-            sources.append({"text": source, "link": link})
+            # Only add each distinct (text, link) source once, even if
+            # multiple chunks come from the same course/lesson.
+            source_key = (source, link)
+            if source_key not in seen_sources:
+                seen_sources.add(source_key)
+                sources.append({"text": source, "link": link})
 
             formatted.append(f"{header}\n{doc}")
         

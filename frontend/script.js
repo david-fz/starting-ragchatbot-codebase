@@ -134,22 +134,24 @@ function addMessage(content, type, sources = null, isWelcome = false) {
 
     // Populate sources via DOM APIs (not string concatenation) so link
     // hrefs never pass through innerHTML and only the label text -- never
-    // the raw URL -- is ever visible.
+    // the raw URL -- is ever visible. Each source renders as its own chip
+    // instead of a comma-separated run of text, for readability.
     if (sources && sources.length > 0) {
         const sourcesContent = messageDiv.querySelector('.sources-content');
-        sources.forEach((source, index) => {
-            if (index > 0) {
-                sourcesContent.appendChild(document.createTextNode(', '));
-            }
+        sources.forEach((source) => {
             if (source.link) {
                 const anchor = document.createElement('a');
                 anchor.href = source.link;
                 anchor.textContent = source.text;
+                anchor.className = 'source-chip';
                 anchor.target = '_blank';
                 anchor.rel = 'noopener noreferrer';
                 sourcesContent.appendChild(anchor);
             } else {
-                sourcesContent.appendChild(document.createTextNode(source.text));
+                const chip = document.createElement('span');
+                chip.textContent = source.text;
+                chip.className = 'source-chip';
+                sourcesContent.appendChild(chip);
             }
         });
     }
