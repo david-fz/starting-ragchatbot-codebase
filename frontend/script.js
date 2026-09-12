@@ -120,20 +120,43 @@ function addMessage(content, type, sources = null, isWelcome = false) {
     const displayContent = type === 'assistant' ? marked.parse(content) : escapeHtml(content);
     
     let html = `<div class="message-content">${displayContent}</div>`;
-    
+
     if (sources && sources.length > 0) {
         html += `
             <details class="sources-collapsible">
                 <summary class="sources-header">Sources</summary>
-                <div class="sources-content">${sources.join(', ')}</div>
+                <div class="sources-content"></div>
             </details>
         `;
     }
-    
+
     messageDiv.innerHTML = html;
+
+    // Populate sources via DOM APIs (not string concatenation) so link
+    // hrefs never pass through innerHTML and only the label text -- never
+    // the raw URL -- is ever visible.
+    if (sources && sources.length > 0) {
+        const sourcesContent = messageDiv.querySelector('.sources-content');
+        sources.forEach((source, index) => {
+            if (index > 0) {
+                sourcesContent.appendChild(document.createTextNode(', '));
+            }
+            if (source.link) {
+                const anchor = document.createElement('a');
+                anchor.href = source.link;
+                anchor.textContent = source.text;
+                anchor.target = '_blank';
+                anchor.rel = 'noopener noreferrer';
+                sourcesContent.appendChild(anchor);
+            } else {
+                sourcesContent.appendChild(document.createTextNode(source.text));
+            }
+        });
+    }
+
     chatMessages.appendChild(messageDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
-    
+
     return messageId;
 }
 

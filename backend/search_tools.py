@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional, Protocol
+from typing import Dict, Any, Optional, Protocol, List
 from abc import ABC, abstractmethod
 from vector_store import VectorStore, SearchResults
 
@@ -8,7 +8,7 @@ class Tool(ABC):
     
     @abstractmethod
     def get_tool_definition(self) -> Dict[str, Any]:
-        """Return Anthropic tool definition for this tool"""
+        """Return a JSON-schema tool definition (name/description/input_schema) for this tool"""
         pass
     
     @abstractmethod
@@ -22,10 +22,10 @@ class CourseSearchTool(Tool):
     
     def __init__(self, vector_store: VectorStore):
         self.store = vector_store
-        self.last_sources = []  # Track sources from last search
+        self.last_sources: List[Dict[str, Optional[str]]] = []  # Track sources (text + optional link) from last search
     
     def get_tool_definition(self) -> Dict[str, Any]:
-        """Return Anthropic tool definition for this tool"""
+        """Return a JSON-schema tool definition (name/description/input_schema) for this tool"""
         return {
             "name": "search_course_content",
             "description": "Search course materials with smart course name matching and lesson filtering",
@@ -104,8 +104,17 @@ class CourseSearchTool(Tool):
             source = course_title
             if lesson_num is not None:
                 source += f" - Lesson {lesson_num}"
-            sources.append(source)
-            
+
+            # Resolve a link: lesson-specific link when we have a lesson
+            # number, otherwise fall back to the course link. Both store
+            # methods return None on any lookup failure.
+            if lesson_num is not None:
+                link = self.store.get_lesson_link(course_title, lesson_num)
+            else:
+                link = self.store.get_course_link(course_title)
+
+            sources.append({"text": source, "link": link})
+
             formatted.append(f"{header}\n{doc}")
         
         # Store sources for retrieval
@@ -129,7 +138,7 @@ class ToolManager:
 
     
     def get_tool_definitions(self) -> list:
-        """Get all tool definitions for Anthropic tool calling"""
+        """Get all tool definitions for LLM tool/function calling"""
         return [tool.get_tool_definition() for tool in self.tools.values()]
     
     def execute_tool(self, tool_name: str, **kwargs) -> str:
