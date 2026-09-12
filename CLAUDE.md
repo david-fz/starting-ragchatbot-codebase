@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Setup (first time)
-cp .env.example .env        # then set ANTHROPIC_API_KEY inside
+cp .env.example .env        # then set GEMINI_API_KEY inside
 uv sync
 
 # Run the app (backend serves the frontend too)
@@ -31,10 +31,10 @@ This is a single-process RAG (Retrieval-Augmented Generation) app: **FastAPI ser
 `app.py` → `RAGSystem.query()` orchestrates everything:
 
 1. `SessionManager` fetches prior conversation history (in-memory only, keyed by `session_id`).
-2. `AIGenerator` calls Claude with the system prompt, history, and tool definitions (`tool_choice: auto`).
-3. Claude decides whether to call the `search_course_content` tool (only for course-specific questions — general knowledge is answered directly per the system prompt in `ai_generator.py`).
+2. `AIGenerator` calls Gemini with the system instruction, history, and tool (function) definitions.
+3. Gemini decides whether to call the `search_course_content` tool (only for course-specific questions — general knowledge is answered directly per the system prompt in `ai_generator.py`).
 4. If invoked, `CourseSearchTool.execute()` (`search_tools.py`) calls `VectorStore.search()`, which first resolves a fuzzy course name via semantic search against the `course_catalog` collection, then queries the `course_content` collection (ChromaDB) filtered by course/lesson.
-5. Tool results are sent back to Claude in a **second** API call (no further tool loop — one search per query, enforced by the system prompt) to produce the final answer.
+5. Tool results are sent back to Gemini in a **second** API call (no further tool loop — one search per query, enforced by the system prompt) to produce the final answer.
 6. `RAGSystem` pulls tracked sources off the tool (`ToolManager.get_last_sources()`/`reset_sources()`), updates session history, and returns `(answer, sources)` to the API layer.
 
 ### Component responsibilities (`backend/`)
@@ -42,11 +42,11 @@ This is a single-process RAG (Retrieval-Augmented Generation) app: **FastAPI ser
 - `rag_system.py` — orchestrator/composition root; wires all components together. Start here to trace any end-to-end behavior.
 - `vector_store.py` — the only place that talks to ChromaDB. Maintains two collections: `course_catalog` (one doc per course, used for fuzzy course-name resolution) and `course_content` (chunked text, used for actual retrieval). Embeddings use `sentence-transformers` (`all-MiniLM-L6-v2`).
 - `document_processor.py` — parses course documents into `Course`/`Lesson`/`CourseChunk` (see expected file format below) and chunks lesson text sentence-aware with overlap (`CHUNK_SIZE`/`CHUNK_OVERLAP` from `config.py`). The first chunk of each lesson gets a `"Lesson N content: ..."` prefix for retrieval context.
-- `search_tools.py` — implements Anthropic's tool-use pattern: `Tool` ABC, `CourseSearchTool` (schema + `execute`), and `ToolManager` (registry, dispatch, source tracking). Add new retrieval capabilities here as new `Tool` subclasses registered in `rag_system.py`.
-- `ai_generator.py` — the only place that calls the Anthropic API. Owns the system prompt and the two-call tool-execution flow (`_handle_tool_execution`). No streaming.
+- `search_tools.py` — implements a provider-agnostic tool-use pattern (JSON-schema tool defs): `Tool` ABC, `CourseSearchTool` (schema + `execute`), and `ToolManager` (registry, dispatch, source tracking). Add new retrieval capabilities here as new `Tool` subclasses registered in `rag_system.py`.
+- `ai_generator.py` — the only place that calls the Gemini API (`google-genai` SDK). Owns the system prompt, converts tool defs to Gemini `FunctionDeclaration`s, and runs the two-call tool-execution flow (`_handle_tool_execution`). No streaming.
 - `session_manager.py` — in-memory conversation history only; nothing is persisted, history is lost on restart, and is capped at `MAX_HISTORY` exchanges.
 - `models.py` — shared Pydantic models (`Course`, `Lesson`, `CourseChunk`) used across document processing, vector storage, and the API layer.
-- `config.py` — single dataclass config (Claude model, chunk size/overlap, `MAX_RESULTS`, `CHROMA_PATH`, `MAX_HISTORY`), loaded from `.env` via `python-dotenv`.
+- `config.py` — single dataclass config (Gemini model, chunk size/overlap, `MAX_RESULTS`, `CHROMA_PATH`, `MAX_HISTORY`), loaded from `.env` via `python-dotenv`.
 - `app.py` — FastAPI routes (`/api/query`, `/api/courses`) and the startup hook that auto-ingests `../docs` into ChromaDB on launch (skips courses whose title already exists, so restarts don't duplicate data).
 
 ### Document ingestion format
