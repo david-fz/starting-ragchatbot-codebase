@@ -126,6 +126,121 @@ def tool_manager_with_search_tool(mock_vector_store: MagicMock) -> ToolManager:
 
 
 @pytest.fixture
+def mock_rag_system() -> MagicMock:
+    """A `RAGSystem` double for API-layer tests.
+
+    Preconfigured with return values matching the shapes `app.py`'s endpoints expect,
+    so tests only need to override what's relevant to the case under test.
+    """
+    mock = MagicMock(spec=RAGSystem)
+    mock.session_manager = MagicMock()
+    mock.session_manager.create_session.return_value = "test-session-id"
+    mock.query.return_value = (
+        "Vector databases store embeddings for similarity search.",
+        [{"text": "Intro to RAG - Lesson 2", "link": "https://example.com/intro-to-rag/lesson-2"}],
+    )
+    mock.get_course_analytics.return_value = {
+        "total_courses": 2,
+        "course_titles": ["Intro to RAG", "Advanced RAG"],
+    }
+    return mock
+
+
+@pytest.fixture
+def test_app(mock_rag_system: MagicMock):
+    """A FastAPI app exposing the same `/api/*` routes as `backend/app.py`, built
+    inline against `mock_rag_system` instead of importing `app.py` directly.
+
+    `app.py` mounts `StaticFiles(directory="../frontend", ...)` at import time and
+    that directory doesn't exist in the test environment, so importing it there would
+    raise. Defining the routes here (kept in sync with `app.py`'s route bodies)
+    sidesteps that without needing to touch production code or the filesystem.
+    """
+    from typing import List, Optional
+
+    from fastapi import FastAPI, HTTPException
+    from fastapi.middleware.cors import CORSMiddleware
+    from pydantic import BaseModel
+
+    app = FastAPI(title="Course Materials RAG System (test)")
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    class QueryRequest(BaseModel):
+        query: str
+        session_id: Optional[str] = None
+
+    class Source(BaseModel):
+        text: str
+        link: Optional[str] = None
+
+    class QueryResponse(BaseModel):
+        answer: str
+        sources: List[Source]
+        session_id: str
+
+    class CourseStats(BaseModel):
+        total_courses: int
+        course_titles: List[str]
+
+    class ClearSessionRequest(BaseModel):
+        session_id: str
+
+    class ClearSessionResponse(BaseModel):
+        success: bool
+
+    @app.post("/api/query", response_model=QueryResponse)
+    async def query_documents(request: QueryRequest):
+        try:
+            session_id = request.session_id
+            if not session_id:
+                session_id = mock_rag_system.session_manager.create_session()
+            answer, sources = mock_rag_system.query(request.query, session_id)
+            return QueryResponse(answer=answer, sources=sources, session_id=session_id)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.post("/api/session/clear", response_model=ClearSessionResponse)
+    async def clear_session(request: ClearSessionRequest):
+        try:
+            mock_rag_system.session_manager.clear_session(request.session_id)
+            return ClearSessionResponse(success=True)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.get("/api/courses", response_model=CourseStats)
+    async def get_course_stats():
+        try:
+            analytics = mock_rag_system.get_course_analytics()
+            return CourseStats(
+                total_courses=analytics["total_courses"],
+                course_titles=analytics["course_titles"],
+            )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.get("/")
+    async def root():
+        return {"status": "ok"}
+
+    return app
+
+
+@pytest.fixture
+def client(test_app):
+    """A `TestClient` bound to `test_app`, for making HTTP requests in API tests."""
+    from fastapi.testclient import TestClient
+
+    return TestClient(test_app)
+
+
+@pytest.fixture
 def rag_system(monkeypatch: pytest.MonkeyPatch, mock_vector_store: MagicMock) -> RAGSystem:
     """A real `RAGSystem` (real ToolManager/CourseSearchTool/CourseOutlineTool/AIGenerator/
     SessionManager) with only `VectorStore` replaced by `mock_vector_store` — the one real
