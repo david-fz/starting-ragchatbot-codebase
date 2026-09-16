@@ -10,6 +10,7 @@ Notes on approach:
   enforces on `types.Content.role` ("user" or "model" only). This lets tests reproduce
   the production "query failed" bug deterministically and without any network access.
 """
+
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -51,7 +52,9 @@ class FakeGeminiClient:
             # the same `contents` list across rounds, and callers should be
             # able to inspect each call's `contents` as they were *at that
             # call*, not as they end up after later rounds mutate the list.
-            self._outer.calls.append({"model": model, "contents": list(contents), "config": config})
+            self._outer.calls.append(
+                {"model": model, "contents": list(contents), "config": config}
+            )
             index = len(self._outer.calls) - 1
             if index >= len(self._outer.responses):
                 raise AssertionError(
@@ -109,8 +112,16 @@ def mock_vector_store() -> MagicMock:
         "course_link": "https://example.com/intro-to-rag",
         "instructor": "Jane Doe",
         "lessons": [
-            {"lesson_number": 1, "lesson_title": "What is RAG?", "lesson_link": "https://example.com/intro-to-rag/lesson-1"},
-            {"lesson_number": 2, "lesson_title": "Vector databases", "lesson_link": "https://example.com/intro-to-rag/lesson-2"},
+            {
+                "lesson_number": 1,
+                "lesson_title": "What is RAG?",
+                "lesson_link": "https://example.com/intro-to-rag/lesson-1",
+            },
+            {
+                "lesson_number": 2,
+                "lesson_title": "Vector databases",
+                "lesson_link": "https://example.com/intro-to-rag/lesson-2",
+            },
         ],
     }
     return store
@@ -126,7 +137,9 @@ def tool_manager_with_search_tool(mock_vector_store: MagicMock) -> ToolManager:
 
 
 @pytest.fixture
-def rag_system(monkeypatch: pytest.MonkeyPatch, mock_vector_store: MagicMock) -> RAGSystem:
+def rag_system(
+    monkeypatch: pytest.MonkeyPatch, mock_vector_store: MagicMock
+) -> RAGSystem:
     """A real `RAGSystem` (real ToolManager/CourseSearchTool/CourseOutlineTool/AIGenerator/
     SessionManager) with only `VectorStore` replaced by `mock_vector_store` — the one real
     I/O dependency (ChromaDB + sentence-transformers) that would otherwise run here.
@@ -136,5 +149,7 @@ def rag_system(monkeypatch: pytest.MonkeyPatch, mock_vector_store: MagicMock) ->
     (see test_ai_generator.py/test_rag_system.py), or mock `ai_generator.generate_response`
     directly when they only care about RAGSystem's own orchestration logic.
     """
-    monkeypatch.setattr("rag_system.VectorStore", lambda *args, **kwargs: mock_vector_store)
+    monkeypatch.setattr(
+        "rag_system.VectorStore", lambda *args, **kwargs: mock_vector_store
+    )
     return RAGSystem(real_config)

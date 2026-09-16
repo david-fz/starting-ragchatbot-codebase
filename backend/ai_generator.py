@@ -2,6 +2,7 @@ from google import genai
 from google.genai import types
 from typing import List, Optional, Dict, Any
 
+
 class AIGenerator:
     """Handles interactions with Google's Gemini API for generating responses"""
 
@@ -46,15 +47,15 @@ Provide only the direct answer to what was asked.
         self.model = model
 
         # Pre-build base generation config params
-        self.base_config = {
-            "temperature": 0,
-            "max_output_tokens": 800
-        }
+        self.base_config = {"temperature": 0, "max_output_tokens": 800}
 
-    def generate_response(self, query: str,
-                         conversation_history: Optional[str] = None,
-                         tools: Optional[List] = None,
-                         tool_manager=None) -> str:
+    def generate_response(
+        self,
+        query: str,
+        conversation_history: Optional[str] = None,
+        tools: Optional[List] = None,
+        tool_manager=None,
+    ) -> str:
         """
         Generate AI response with optional tool usage and conversation context.
 
@@ -76,23 +77,29 @@ Provide only the direct answer to what was asked.
         )
 
         # Prepare initial conversation content
-        contents = [types.Content(role="user", parts=[types.Part.from_text(text=query)])]
+        contents = [
+            types.Content(role="user", parts=[types.Part.from_text(text=query)])
+        ]
 
         # Get response from Gemini
         response = self.client.models.generate_content(
             model=self.model,
             contents=contents,
-            config=self._build_config(system_content, tools)
+            config=self._build_config(system_content, tools),
         )
 
         # Handle tool execution if needed
         if response.function_calls and tool_manager:
-            return self._run_tool_loop(response, contents, system_content, tools, tool_manager)
+            return self._run_tool_loop(
+                response, contents, system_content, tools, tool_manager
+            )
 
         # Return direct response
         return response.text
 
-    def _build_config(self, system_content: str, tools: Optional[List[Dict[str, Any]]] = None) -> types.GenerateContentConfig:
+    def _build_config(
+        self, system_content: str, tools: Optional[List[Dict[str, Any]]] = None
+    ) -> types.GenerateContentConfig:
         """
         Build a GenerateContentConfig, attaching tools only when provided.
 
@@ -103,10 +110,7 @@ Provide only the direct answer to what was asked.
         Returns:
             A GenerateContentConfig ready to pass to generate_content
         """
-        config_kwargs = {
-            **self.base_config,
-            "system_instruction": system_content
-        }
+        config_kwargs = {**self.base_config, "system_instruction": system_content}
         if tools:
             config_kwargs["tools"] = self._convert_tools(tools)
         return types.GenerateContentConfig(**config_kwargs)
@@ -126,7 +130,7 @@ Provide only the direct answer to what was asked.
             types.FunctionDeclaration(
                 name=tool["name"],
                 description=tool["description"],
-                parameters_json_schema=tool["input_schema"]
+                parameters_json_schema=tool["input_schema"],
             )
             for tool in tools
         ]
@@ -150,24 +154,25 @@ Provide only the direct answer to what was asked.
         response_parts = []
         for call in function_calls:
             try:
-                tool_result = tool_manager.execute_tool(
-                    call.name,
-                    **call.args
-                )
+                tool_result = tool_manager.execute_tool(call.name, **call.args)
             except Exception as e:
                 tool_result = f"Tool '{call.name}' failed: {e}"
 
             response_parts.append(
                 types.Part.from_function_response(
-                    name=call.name,
-                    response={"result": tool_result}
+                    name=call.name, response={"result": tool_result}
                 )
             )
         return response_parts
 
-    def _run_tool_loop(self, response, contents: List[types.Content],
-                       system_content: str, tools: Optional[List],
-                       tool_manager) -> str:
+    def _run_tool_loop(
+        self,
+        response,
+        contents: List[types.Content],
+        system_content: str,
+        tools: Optional[List],
+        tool_manager,
+    ) -> str:
         """
         Drive up to MAX_TOOL_ROUNDS sequential rounds of tool calling, giving
         Gemini a chance to reason about each round's results before deciding
@@ -198,7 +203,9 @@ Provide only the direct answer to what was asked.
             # add their results as a single "user" turn (Gemini's Content.role
             # only accepts "user"/"model" — there's no OpenAI-style "tool" role).
             contents.append(response.candidates[0].content)
-            response_parts = self._execute_tool_calls(response.function_calls, tool_manager)
+            response_parts = self._execute_tool_calls(
+                response.function_calls, tool_manager
+            )
             if response_parts:
                 contents.append(types.Content(role="user", parts=response_parts))
 
@@ -213,7 +220,7 @@ Provide only the direct answer to what was asked.
             response = self.client.models.generate_content(
                 model=self.model,
                 contents=contents,
-                config=self._build_config(system_content, tools)
+                config=self._build_config(system_content, tools),
             )
 
         # Final call without tools, to force a plain-text answer once the
@@ -221,6 +228,6 @@ Provide only the direct answer to what was asked.
         final_response = self.client.models.generate_content(
             model=self.model,
             contents=contents,
-            config=self._build_config(system_content, tools=None)
+            config=self._build_config(system_content, tools=None),
         )
         return final_response.text
