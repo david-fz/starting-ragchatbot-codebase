@@ -196,10 +196,16 @@ class CourseOutlineTool(Tool):
 
 class ToolManager:
     """Manages available tools for the AI"""
-    
+
     def __init__(self):
         self.tools = {}
-    
+        # Sources collected across every execute_tool() call for the current
+        # query, in call order. Needed because a query can now involve
+        # multiple sequential tool calls (possibly to different tools, or the
+        # same tool twice) — sources must accumulate across all of them
+        # rather than reflecting only the most recent call.
+        self._accumulated_sources: List[Dict[str, Optional[str]]] = []
+
     def register_tool(self, tool: Tool):
         """Register any tool that implements the Tool interface"""
         tool_def = tool.get_tool_definition()
@@ -208,28 +214,35 @@ class ToolManager:
             raise ValueError("Tool must have a 'name' in its definition")
         self.tools[tool_name] = tool
 
-    
+
     def get_tool_definitions(self) -> list:
         """Get all tool definitions for LLM tool/function calling"""
         return [tool.get_tool_definition() for tool in self.tools.values()]
-    
+
     def execute_tool(self, tool_name: str, **kwargs) -> str:
         """Execute a tool by name with given parameters"""
         if tool_name not in self.tools:
             return f"Tool '{tool_name}' not found"
-        
-        return self.tools[tool_name].execute(**kwargs)
-    
+
+        tool = self.tools[tool_name]
+        result = tool.execute(**kwargs)
+
+        # Collect and immediately consume this call's sources, so a later
+        # call (to this tool or another) can't lose earlier sources by
+        # overwriting them.
+        if getattr(tool, "last_sources", None):
+            self._accumulated_sources.extend(tool.last_sources)
+            tool.last_sources = []
+
+        return result
+
     def get_last_sources(self) -> list:
-        """Get sources from the last search operation"""
-        # Check all tools for last_sources attribute
-        for tool in self.tools.values():
-            if hasattr(tool, 'last_sources') and tool.last_sources:
-                return tool.last_sources
-        return []
+        """Get sources accumulated across this query's tool calls, in call order"""
+        return self._accumulated_sources
 
     def reset_sources(self):
         """Reset sources from all tools that track sources"""
+        self._accumulated_sources = []
         for tool in self.tools.values():
             if hasattr(tool, 'last_sources'):
                 tool.last_sources = []
