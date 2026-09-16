@@ -8,6 +8,7 @@ constraint the real Gemini API enforces, and records every call so tests can ass
 external behavior: how many API calls were made, what was sent in each one, which
 tools were executed with which args, and what text was ultimately returned.
 """
+
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -42,7 +43,9 @@ def test_generate_response_without_tool_call_returns_text_directly(
     fake_gemini_client_factory, mock_vector_store
 ):
     ai_gen = AIGenerator(api_key="test-key", model="test-model")
-    response = SimpleNamespace(function_calls=None, text="Paris is the capital of France.")
+    response = SimpleNamespace(
+        function_calls=None, text="Paris is the capital of France."
+    )
     ai_gen.client = fake_gemini_client_factory(responses=[response])
     tool_manager = MagicMock()
 
@@ -79,7 +82,9 @@ def test_generate_response_completes_tool_call_round_trip(
     ai_gen = AIGenerator(api_key="test-key", model="test-model")
     ai_gen.client = fake_gemini_client_factory(
         responses=[
-            _tool_call_response(("search_course_content", {"query": "vector databases"})),
+            _tool_call_response(
+                ("search_course_content", {"query": "vector databases"})
+            ),
             _text_response("Here is what I found about vector databases."),
         ]
     )
@@ -126,21 +131,30 @@ def test_generate_response_executes_all_tool_calls_in_a_single_round(
     assert result == "Combined answer."
     assert tool_manager.execute_tool.call_count == 2
     tool_manager.execute_tool.assert_any_call("search_course_content", query="a")
-    tool_manager.execute_tool.assert_any_call("get_course_outline", course_name="Intro to RAG")
+    tool_manager.execute_tool.assert_any_call(
+        "get_course_outline", course_name="Intro to RAG"
+    )
     assert len(ai_gen.client.calls) == 2
 
 
 def test_generate_response_two_rounds_uses_second_search_result(
-    fake_gemini_client_factory, mock_vector_store,
+    fake_gemini_client_factory,
+    mock_vector_store,
 ):
     """The sequential-tool-calling happy path: round 1 gets a course outline,
     round 2 (informed by round 1's result) searches content, round 3 answers."""
     ai_gen = AIGenerator(api_key="test-key", model="test-model")
     ai_gen.client = fake_gemini_client_factory(
         responses=[
-            _tool_call_response(("get_course_outline", {"course_name": "Intro to RAG"})),
-            _tool_call_response(("search_course_content", {"query": "vector databases"})),
-            _text_response("Course Y also covers vector databases, like lesson 4 of Intro to RAG."),
+            _tool_call_response(
+                ("get_course_outline", {"course_name": "Intro to RAG"})
+            ),
+            _tool_call_response(
+                ("search_course_content", {"query": "vector databases"})
+            ),
+            _text_response(
+                "Course Y also covers vector databases, like lesson 4 of Intro to RAG."
+            ),
         ]
     )
 
@@ -156,10 +170,17 @@ def test_generate_response_two_rounds_uses_second_search_result(
         tool_manager=tool_manager,
     )
 
-    assert result == "Course Y also covers vector databases, like lesson 4 of Intro to RAG."
+    assert (
+        result
+        == "Course Y also covers vector databases, like lesson 4 of Intro to RAG."
+    )
     assert tool_manager.execute_tool.call_count == 2
-    tool_manager.execute_tool.assert_any_call("get_course_outline", course_name="Intro to RAG")
-    tool_manager.execute_tool.assert_any_call("search_course_content", query="vector databases")
+    tool_manager.execute_tool.assert_any_call(
+        "get_course_outline", course_name="Intro to RAG"
+    )
+    tool_manager.execute_tool.assert_any_call(
+        "search_course_content", query="vector databases"
+    )
     assert len(ai_gen.client.calls) == 3
 
 
@@ -179,7 +200,9 @@ def test_generate_response_stops_early_when_second_round_has_no_tool_calls(
     tool_manager = MagicMock()
     tool_manager.execute_tool.return_value = "Embeddings info."
 
-    result = ai_gen.generate_response(query="What are embeddings?", tools=[], tool_manager=tool_manager)
+    result = ai_gen.generate_response(
+        query="What are embeddings?", tools=[], tool_manager=tool_manager
+    )
 
     assert result == "Embeddings are vector representations of data."
     tool_manager.execute_tool.assert_called_once()
@@ -187,7 +210,8 @@ def test_generate_response_stops_early_when_second_round_has_no_tool_calls(
 
 
 def test_generate_response_caps_at_max_rounds_and_forces_final_answer(
-    fake_gemini_client_factory, mock_vector_store,
+    fake_gemini_client_factory,
+    mock_vector_store,
 ):
     """If Gemini still wants a tool after MAX_TOOL_ROUNDS rounds, the round-2
     tool call is still executed (its result isn't discarded), and a final
@@ -220,14 +244,17 @@ def test_generate_response_caps_at_max_rounds_and_forces_final_answer(
 
 
 def test_generate_response_recovers_from_tool_execution_exception(
-    fake_gemini_client_factory, mock_vector_store,
+    fake_gemini_client_factory,
+    mock_vector_store,
 ):
     """A tool call that raises must not crash the request — the error is fed
     back to Gemini as a function response, and the flow completes normally."""
     ai_gen = AIGenerator(api_key="test-key", model="test-model")
     ai_gen.client = fake_gemini_client_factory(
         responses=[
-            _tool_call_response(("search_course_content", {"query": "vector databases"})),
+            _tool_call_response(
+                ("search_course_content", {"query": "vector databases"})
+            ),
             _text_response("I wasn't able to retrieve that information."),
         ]
     )
@@ -246,14 +273,17 @@ def test_generate_response_recovers_from_tool_execution_exception(
 
 
 def test_generate_response_tool_error_string_flows_through_normally(
-    fake_gemini_client_factory, mock_vector_store,
+    fake_gemini_client_factory,
+    mock_vector_store,
 ):
     """A tool returning its own error string (not raising) needs no special
     handling — it's just another function response."""
     ai_gen = AIGenerator(api_key="test-key", model="test-model")
     ai_gen.client = fake_gemini_client_factory(
         responses=[
-            _tool_call_response(("search_course_content", {"query": "nonexistent topic"})),
+            _tool_call_response(
+                ("search_course_content", {"query": "nonexistent topic"})
+            ),
             _text_response("No relevant content was found for that topic."),
         ]
     )
@@ -281,8 +311,12 @@ def test_generate_response_preserves_history_across_rounds(
     ai_gen = AIGenerator(api_key="test-key", model="test-model")
     ai_gen.client = fake_gemini_client_factory(
         responses=[
-            _tool_call_response(("get_course_outline", {"course_name": "Intro to RAG"})),
-            _tool_call_response(("search_course_content", {"query": "vector databases"})),
+            _tool_call_response(
+                ("get_course_outline", {"course_name": "Intro to RAG"})
+            ),
+            _tool_call_response(
+                ("search_course_content", {"query": "vector databases"})
+            ),
             _text_response("Final answer."),
         ]
     )
