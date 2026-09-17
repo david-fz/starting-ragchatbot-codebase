@@ -56,6 +56,7 @@ body {
 
 /* Theme-transitioning elements: smooth color/background swap on toggle */
 body,
+.app-header,
 .main-content,
 .sidebar,
 .chat-main,
@@ -75,16 +76,13 @@ body,
 
 /* Theme Toggle Button */
 .theme-toggle {
-    position: fixed;
-    top: 1.25rem;
-    right: 1.25rem;
-    z-index: 100;
+    flex-shrink: 0;
     width: 44px;
     height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--surface);
+    background: var(--background);
     border: 1px solid var(--border-color);
     border-radius: 50%;
     color: var(--text-primary);
@@ -134,15 +132,6 @@ body,
     transform: rotate(0deg) scale(1);
 }
 
-@media (max-width: 768px) {
-    .theme-toggle {
-        top: 0.75rem;
-        right: 0.75rem;
-        width: 40px;
-        height: 40px;
-    }
-}
-
 /* Container - Full Screen */
 .container {
     height: 100vh;
@@ -153,25 +142,61 @@ body,
     padding: 0;
 }
 
-/* Header - Hidden */
-header {
-    display: none;
+/* Header */
+.app-header {
+    flex-shrink: 0;
+    padding: 1rem 2rem;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border-color);
+    box-shadow: var(--shadow);
+    position: relative;
+    z-index: 10;
+}
+
+.header-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.header-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+    min-width: 0;
+}
+
+.header-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
 }
 
 header h1 {
-    font-size: 1.75rem;
+    font-size: 1.5rem;
     font-weight: 700;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
     margin: 0;
+    line-height: 1.25;
 }
 
 .subtitle {
-    font-size: 0.95rem;
+    font-size: 0.85rem;
     color: var(--text-secondary);
-    margin-top: 0.5rem;
+    margin-top: 0.2rem;
 }
 
 /* Main Content Area with Sidebar */
@@ -837,14 +862,34 @@ details[open] .suggested-header::before {
         order: 1;
     }
     
-    header {
-        padding: 1rem;
+    .app-header {
+        padding: 0.75rem 1rem;
     }
-    
+
+    .header-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+    }
+
+    .header-icon svg {
+        width: 20px;
+        height: 20px;
+    }
+
     header h1 {
-        font-size: 1.5rem;
+        font-size: 1.15rem;
     }
-    
+
+    .subtitle {
+        display: none;
+    }
+
+    .theme-toggle {
+        width: 38px;
+        height: 38px;
+    }
+
     .chat-messages {
         padding: 1rem;
     }
